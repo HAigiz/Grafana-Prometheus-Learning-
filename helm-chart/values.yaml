@@ -1,0 +1,14 @@
+replicaCount: 1
+
+image:
+  repository: goida/flask-app
+  tag: "v1"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+env:
+  databaseUrl: "postgresql://user:password@db-service:5432/mydb"
+  redisUrl: "redis://redis-service:6379/0"

@@ -1,0 +1,96 @@
+---
+- name: Setup K3s and ArgoCD locally
+  hosts: localhost
+  connection: local
+  become: yes
+  vars:
+    # Определяем реального пользователя, который запустил sudo
+    real_user: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+    real_home: "/home/{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+
+  tasks:
+    - name: Install k3s
+      shell: "curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE='644' sh -s -"
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for k3s to initialize
+      pause:
+        seconds: 15
+
+    - name: Ensure .kube directory exists
+      file:
+        path: "{{ real_home }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ real_user }}"
+
+    - name: Copy k3s kubeconfig
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ real_home }}/.kube/config"
+        remote_src: yes
+        owner: "{{ real_user }}"
+        mode: '0600'
+
+    - name: Purge existing ArgoCD CRDs to avoid Helm conflicts
+      shell: |
+        # Удаляем CRD
+        kubectl get crd -o name | grep argoproj.io | xargs -r kubectl delete
+        # Удаляем ClusterRoles
+        kubectl get clusterrole -o name | grep argocd | xargs -r kubectl delete
+        # Удаляем ClusterRoleBindings
+        kubectl get clusterrolebinding -o name | grep argocd | xargs -r kubectl delete
+        # Удаляем Namespace (если завис)
+        kubectl delete ns argocd --ignore-not-found
+      ignore_errors: yes
+
+    - name: Deploy ArgoCD via Helm CLI
+      become: yes
+      become_user: "{{ real_user }}"
+      shell: |
+        /usr/local/bin/helm upgrade --install argocd argo/argo-cd \
+          --namespace argocd \
+          --create-namespace \
+          --set applicationSet.enabled=false \
+          --wait --timeout 5m
+
+    - name: Install Helm (Direct Binary)
+      shell: |
+        curl -L https://get.helm.sh | tar -xz && \
+        mv linux-amd64/helm /usr/local/bin/helm && \
+        rm -rf linux-amd64
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Create argocd namespace
+      shell: /usr/local/bin/kubectl create namespace argocd
+      become: yes
+      become_user: "{{ real_user }}"
+      ignore_errors: yes
+
+    - name: Add ArgoCD Helm repo and Update
+      become: yes
+      become_user: "{{ real_user }}"
+      shell: |
+        /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm
+        /usr/local/bin/helm repo update
+
+    - name: Deploy ArgoCD via Helm CLI
+      become: yes
+      become_user: "{{ real_user }}"
+      shell: |
+        /usr/local/bin/helm upgrade --install argocd argo/argo-cd \
+          --namespace argocd \
+          --set applicationSet.enabled=false \
+          --wait --timeout 5m
+
+    - name: Wait for ArgoCD server to be ready
+      shell: /usr/local/bin/kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=300s
+      become: yes
+      become_user: "{{ real_user }}"
+
+    - name: Apply ArgoCD Application
+      shell: /usr/local/bin/kubectl apply -f argo-application.yaml
+      become: yes
+      become_user: "{{ real_user }}"

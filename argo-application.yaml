@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flask-app-deploy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/HAigiz/Flask-Practice'
+    targetRevision: HEAD
+    path: flask-app
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true

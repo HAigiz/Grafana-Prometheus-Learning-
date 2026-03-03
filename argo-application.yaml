@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/HAigiz/Flask-Practice'
+    repoURL: 'https://github.com/HAigiz/Grafana-Prometheus-Learning-'
     targetRevision: HEAD
     path: flask-app
   destination:

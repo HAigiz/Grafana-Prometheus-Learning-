@@ -32,6 +32,7 @@ with app.app_context():
 @app.route('/hello', methods=['GET'])
 def hello():
     return "Hello, world!", 200
+    
 # CRUD Эндпоинты
 @app.route('/items', methods=['POST'])
 def create_item():
@@ -66,7 +67,7 @@ def update_item(id):
     item.name = data.get('name', item.name)
     
     db.session.commit()
-    cache.clear()  # Сбрасываем кеш, чтобы GET эндпоинт обновился
+    cache.clear()
     return jsonify({"id": item.id, "name": item.name})
 
 if __name__ == '__main__':
